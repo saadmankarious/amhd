@@ -167,7 +167,7 @@ def check_post_for_proximity(post, source_file, char_range):
                         return  # Stop further checks for this post once a match is found
 
 # Specify the folder containing JSONL files
-folder_path = "../nono_arctic"  # Replace with your folder path
+folder_path = "../arctic"  # Replace with your folder path
 
 # Scan the folder for matching posts with a proximity range of 40 characters
 scan_jsonl_files_for_keywords(folder_path, char_range=40)
