@@ -108,28 +108,24 @@ diagnosis_phrases = [
     "تشخيص الحالة الحالية هو", "تشخيص الحالة النهائية يشير إلى إصابتي بـ"
 ]
 
-# Initialize statistics dictionary
-stats = defaultdict(lambda: {"count": 0, "user_ids": []})
+# Function to scan a single JSONL file for matching posts
+def scan_single_jsonl_file(file_path, char_range=40):
+    stats = defaultdict(lambda: {"count": 0, "user_ids": []})
+    matching_posts = []
 
-# List to store matching posts
-matching_posts = []
+    with open(file_path, 'r', encoding='utf-8') as file:
+        lines = file.readlines()
+        for line in tqdm(lines, desc=f"Inspecting lines in {file_path}", leave=False):
+            try:
+                post = json.loads(line)  # Parse each line as JSON
+                check_post_for_proximity(post, stats, matching_posts, char_range)
+            except json.JSONDecodeError:
+                print(f"Error decoding JSON in file: {file_path}")
 
-# Function to scan JSONL files for matching posts with progress updates
-def scan_jsonl_files_for_keywords(folder_path, char_range=40):
-    files = [f for f in os.listdir(folder_path) if f.endswith('.jsonl')]  # Filter JSONL files
-    for filename in tqdm(files, desc="Processing Files"):  # Live update for files
-        file_path = os.path.join(folder_path, filename)
-        with open(file_path, 'r', encoding='utf-8') as file:
-            lines = file.readlines()
-            for line in tqdm(lines, desc=f"Inspecting lines in {filename}", leave=False):
-                try:
-                    post = json.loads(line)  # Parse each line as JSON
-                    check_post_for_proximity(post, filename, char_range)
-                except json.JSONDecodeError:
-                    print(f"Error decoding JSON in file: {filename}")
+    return stats, matching_posts
 
 # Function to check proximity of diagnosis phrases and keywords
-def check_post_for_proximity(post, source_file, char_range):
+def check_post_for_proximity(post, stats, matching_posts, char_range):
     title = post.get('title', '')
     selftext = post.get('selftext', '')
     user_id = post.get('author', 'unknown')
@@ -166,22 +162,37 @@ def check_post_for_proximity(post, source_file, char_range):
                         })
                         return  # Stop further checks for this post once a match is found
 
+# Function to scan all JSONL files in a folder
+def scan_jsonl_files_for_keywords(folder_path, char_range=40):
+    files = [f for f in os.listdir(folder_path) if f.endswith('.jsonl')]  # Filter JSONL files
+    for filename in tqdm(files, desc="Processing Files"):  # Live update for files
+        file_path = os.path.join(folder_path, filename)
+
+        # Scan the file and get results
+        stats, matching_posts = scan_single_jsonl_file(file_path, char_range)
+
+        # Save results for this file
+        base_name = os.path.splitext(filename)[0]  # Get file name without extension
+        save_results(file_path, stats, matching_posts, base_name)
+
+# Function to save results for a single file
+def save_results(file_path, stats, matching_posts, base_name):
+    output_dir = os.path.dirname(file_path)  # Use the same directory as the input file
+
+    # Save stats
+    stats_file = os.path.join(output_dir, f"{base_name}_matching_stats.json")
+    with open(stats_file, 'w', encoding='utf-8') as stats_output:
+        json.dump(stats, stats_output, ensure_ascii=False, indent=4)
+    print(f"Statistics saved to {stats_file}")
+
+    # Save matching posts
+    matches_file = os.path.join(output_dir, f"{base_name}_matching_posts.json")
+    with open(matches_file, 'w', encoding='utf-8') as matches_output:
+        json.dump(matching_posts, matches_output, ensure_ascii=False, indent=4)
+    print(f"Matching posts saved to {matches_file}")
+
 # Specify the folder containing JSONL files
 folder_path = "../arctic"  # Replace with your folder path
 
 # Scan the folder for matching posts with a proximity range of 40 characters
 scan_jsonl_files_for_keywords(folder_path, char_range=40)
-
-# Save stats to a JSON file
-output_stats_file = "matching_stats.json"
-with open(output_stats_file, 'w', encoding='utf-8') as stats_file:
-    json.dump(stats, stats_file, ensure_ascii=False, indent=4)
-
-print(f"Matching statistics saved to {output_stats_file}")
-
-# Save matching posts to a separate JSON file
-output_matches_file = "matching_posts.json"
-with open(output_matches_file, 'w', encoding='utf-8') as matches_file:
-    json.dump(matching_posts, matches_file, ensure_ascii=False, indent=4)
-
-print(f"Matching posts saved to {output_matches_file}")
